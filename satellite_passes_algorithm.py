@@ -215,46 +215,46 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                         satellite_info=[]
                         for td in tds:
                             satellite_info.append(td.getText())
-                        if satellite_info[11] =='visible':
-                            satellite_info[11]='night'
+
                         passdate = satellite_info[0]
                         passtime = satellite_info[5]
                         altitude = satellite_info[6][:-1]
                         azimuth = satellite_info[7]
-                        daynight = satellite_info[11]
+
                         # if satellite altitude in heavensabove.com is greater than the boundary angle of the swath, then vertex is inside swath
-                        if float (altitude) >float(maximum_angle):
-                            if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time
-                                if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict: 
-                                    passtime = str(int(passtime[:2])+1)
-
-                                elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
-                                    passtime = str(int(passtime[:2])-1)
-                                    
-                                else:     # if it is a new pass time
-                                    overfly_count = overfly_count + 1   # have a new series of overfly
-                                    pass_satellite_dict[passdate + ' ' + passtime[:2]] = []  # construct a new date as key                
-#                                    boundarybox['overfly_date_'+ str(overfly_count)]= passdate +' '+ passtime   #  add date to the attribute table of shp file (only record the first vertex that gives a new date) 
-                            
-#                            f_writer.writerow([satellite_name,instrument_name, maximum_angle, lat, lng, passdate,passtime, altitude, azimuth, daynight])                        
-                            # fill out all the three dictionaries
-                            pass_satellite_dict.setdefault(passdate+ ' ' + passtime[:2], []).append(vertex_order)     
-                            altitude_dict[passdate+ ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)                
-                            time_dict[passdate+ ' ' + passtime[:2]] = passtime
-          
-                        # include also the marginal satellite altitudes which are just slightly out of swath, so that we can measure the proportion and update the vertex later
-                        elif float (altitude) <= float(maximum_angle) and float (altitude) > float(float(maximum_angle)*0.8):
-                            if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time #%%
-                                if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict:  #%%
-                                    passtime = str(int(passtime[:2])+1)
-                                elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
-                                    passtime = str(int(passtime[:2])-1)
-                                else:
-                                    passtime = passtime             
-                            altitude_dict[passdate + ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)
-
-                        else:
-                            continue
+                        if satellite_info[11] =='daylight':
+                            if float (altitude) >float(maximum_angle):
+                                if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time
+                                    if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict: 
+                                        passtime = str(int(passtime[:2])+1)
+    
+                                    elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
+                                        passtime = str(int(passtime[:2])-1)
+                                        
+                                    else:     # if it is a new pass time
+                                        overfly_count = overfly_count + 1   # have a new series of overfly
+                                        pass_satellite_dict[passdate + ' ' + passtime[:2]] = []  # construct a new date as key                
+    #                                    boundarybox['overfly_date_'+ str(overfly_count)]= passdate +' '+ passtime   #  add date to the attribute table of shp file (only record the first vertex that gives a new date) 
+                                
+    #                            f_writer.writerow([satellite_name,instrument_name, maximum_angle, lat, lng, passdate,passtime, altitude, azimuth, daynight])                        
+                                # fill out all the three dictionaries
+                                pass_satellite_dict.setdefault(passdate+ ' ' + passtime[:2], []).append(vertex_order)     
+                                altitude_dict[passdate+ ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)                
+                                time_dict[passdate+ ' ' + passtime[:2]] = passtime
+              
+                            # include also the marginal satellite altitudes which are just slightly out of swath, so that we can measure the proportion and update the vertex later
+                            elif float (altitude) <= float(maximum_angle) and float (altitude) > float(float(maximum_angle)*0.8):
+                                if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time #%%
+                                    if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict:  #%%
+                                        passtime = str(int(passtime[:2])+1)
+                                    elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
+                                        passtime = str(int(passtime[:2])-1)
+                                    else:
+                                        passtime = passtime             
+                                altitude_dict[passdate + ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)
+    
+                            else:
+                                continue
                         
         #%% Check which points are inside satellite dependent threshold              
                 
