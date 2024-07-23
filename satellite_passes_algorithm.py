@@ -34,19 +34,18 @@ __revision__ = '$Format:%H$'
 # check libraries: pyogrio, bs4
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
-                       QgsFeatureSink,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterEnum,
                        QgsProcessingParameterFolderDestination)
 import geopandas as gpd
 import pandas
-import numpy as np
 import csv
 import urllib.request
 from bs4 import BeautifulSoup
 import os
 from shapely.geometry import Polygon
+
 
 
 class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
@@ -111,18 +110,7 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                 self.tr('Output Folder')
             )
         )
-        
-# =============================================================================
-#         # We add a feature sink in which to store our processed features (this
-#         # usually takes the form of a newly created vector layer when the
-#         # algorithm is run in QGIS).
-#         self.addParameter(
-#             QgsProcessingParameterFeatureSink(
-#                 self.OUTPUT,
-#                 self.tr('Output layers')
-#             )
-# =============================================================================
-        
+               
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -177,7 +165,7 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
      #   f_writer = csv.writer (f)
      #   f_writer.writerow(['satellite','sensor', 'maximum_angle', 'lat', 'lng', 'date','time', 'altitude', 'azimuth', 'daynight']) 
         f2_writer = csv.writer (f2)
-        f2_writer.writerow(['satellite','sensor', 'date','time','coverage']) 
+        f2_writer.writerow(['satellite','sensor', 'date','time','daynight','coverage']) 
 
         #%% To store info we got from heavensabove.com into dictionaries for later manipulation
 
@@ -188,7 +176,7 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                 print ('We are getting information for ' + satellite_name + ' ' + instrument_name)
                 
                 # Make three blank dictionaries and one blank list
-                satellite_details =[]  # for saving information from heavensabove.com
+                daynight_dict ={}  # for saving information from heavensabove.com
                 pass_satellite_dict = {} # for storing vertex order (value) with passing date as (key)
                 altitude_dict ={}   # for storing altitude (value) with passing date and vertex order as (key) 
                 time_dict ={}  # for storing satellite passing time (value) with passing date as (key)
@@ -208,21 +196,26 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                     article = req.read().decode('utf-8')
                     soup = BeautifulSoup(article, 'html.parser')
                     table = soup.find("table",{"class": "standardTable"})
-                    tabletext=table.getText()
+                    #tabletext=table.getText()
                     trs = table.find_all ("tr",{"class": "clickableRow"})
                     for tr in trs:
                         tds = tr.find_all ("td")
                         satellite_info=[]
                         for td in tds:
                             satellite_info.append(td.getText())
-
+                        if satellite_info[11] =='visible':
+                            satellite_info[11]='night'
                         passdate = satellite_info[0]
                         passtime = satellite_info[5]
                         altitude = satellite_info[6][:-1]
-                        azimuth = satellite_info[7]
+                        daynight = satellite_info[11]
+                        
 
-                        # if satellite altitude in heavensabove.com is greater than the boundary angle of the swath, then vertex is inside swath
-                        if satellite_info[11] =='daylight':
+                        if daynight == 'night' and (satellite_name =='Sentinel-2A' or satellite_name == 'Sentinel-2B'): # list a list of satellites with passive sensors here
+                            continue
+                        else:
+                                
+                            # if satellite altitude in heavensabove.com is greater than the boundary angle of the swath, then vertex is inside swath
                             if float (altitude) >float(maximum_angle):
                                 if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time
                                     if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict: 
@@ -234,14 +227,14 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                                     else:     # if it is a new pass time
                                         overfly_count = overfly_count + 1   # have a new series of overfly
                                         pass_satellite_dict[passdate + ' ' + passtime[:2]] = []  # construct a new date as key                
-    #                                    boundarybox['overfly_date_'+ str(overfly_count)]= passdate +' '+ passtime   #  add date to the attribute table of shp file (only record the first vertex that gives a new date) 
-                                
-    #                            f_writer.writerow([satellite_name,instrument_name, maximum_angle, lat, lng, passdate,passtime, altitude, azimuth, daynight])                        
+    
                                 # fill out all the three dictionaries
+                                
                                 pass_satellite_dict.setdefault(passdate+ ' ' + passtime[:2], []).append(vertex_order)     
                                 altitude_dict[passdate+ ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)                
                                 time_dict[passdate+ ' ' + passtime[:2]] = passtime
-              
+                                daynight_dict[passdate+ ' ' + passtime[:2]] =daynight
+                                
                             # include also the marginal satellite altitudes which are just slightly out of swath, so that we can measure the proportion and update the vertex later
                             elif float (altitude) <= float(maximum_angle) and float (altitude) > float(float(maximum_angle)*0.8):
                                 if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time #%%
@@ -255,15 +248,17 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
     
                             else:
                                 continue
-                        
+
+                            
+
         #%% Check which points are inside satellite dependent threshold              
                 
                 # 1: no passes
                 if pass_satellite_dict == {}:
-                    f2_writer.writerow([satellite_name,instrument_name, '-','-','No pass within next 10 days']) 
+                    f2_writer.writerow([satellite_name,instrument_name, '-','-','-','No satellite passes within next 10 days']) 
         #            print('No overfly of satellite '+ satellite_name +' within next 10 days')    
                     #!! return shp file as None      
-                    
+
                 else:
                     for k,v in pass_satellite_dict.items():
                  #       pass_datestr = k[:-2] + str(
@@ -272,11 +267,16 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                  #       pass_date = pass_datetime.strftime("%Y-%m-%d %H:%M")
                         
                         v = list(dict.fromkeys(v))
-                        # 2: all passes: create a new ROI Shape with same extention as original 
+                        
+                        # 2: full coverage
                         if len(v) == len(vertices_list): 
-                            f2_writer.writerow([satellite_name,instrument_name, k[:-2],time_dict[k],'Whole']) 
-        #                    print('The whole area is covered under '+ satellite_name + ' ' + instrument_name + ' on ' + k[:-2] + '' + time_dict[k]) 
-                            #!! return shp file as the same shp file
+                            f2_writer.writerow([satellite_name,instrument_name, k[:-2],time_dict[k], daynight_dict[k] ,'Whole']) 
+                            # generate polygons of full passes 
+                            # vertices_list.append(vertices_list[0])
+                            # polygon_geom = Polygon(vertices_list)
+                            # polygon = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[polygon_geom])       
+                            # polygon.to_file(filename='./' + instrument_name + ' ' + k[:-2] + time_dict[k].replace(':', '') + ' full' + '.shp', driver="ESRI Shapefile")
+
                         
                         # 3: partial overfly: create new geometry
                         else:       
@@ -284,10 +284,10 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                             missing_vertices_order =[]
                             missing_vertices = []
                             for i in range (v[0],len(vertices_list)):
-                                if i not in v:
+                                if i not in v:      # if the vertex order is missing
                                     missing_vertices_order.append(i)
                                     missing_vertices.append(vertices_list[i])              
-                            for i in range (0,v[0]):
+                            for i in range (0,v[0]):  # this is repeated to make sure the vertices order
                                 if i not in v:
                                     missing_vertices_order.append(i)  
                                     missing_vertices.append(vertices_list[i])  
@@ -393,15 +393,15 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                                 first_vertex = vt[0]
                                 vt.append(first_vertex)            
                             
-                            vt_array = np.array(vt)
-                            f2_writer.writerow([satellite_name,instrument_name, k[:-2], time_dict[k],'Partial']) 
+                            #vt_array = np.array(vt)
+                            f2_writer.writerow([satellite_name,instrument_name, k[:-2], time_dict[k], daynight_dict[k],'Partial']) 
   
                             # generate polygons of partial passes (geopandas method)
                             polygon_geom = Polygon(vt)
                             polygon = gpd.GeoDataFrame(index=[0], crs='epsg:4326', geometry=[polygon_geom])       
-                            polygon.to_file(filename='./' + instrument_name + ' ' + k[:-2] + time_dict[k].replace(':', '') + '.shp', driver="ESRI Shapefile")
+                            polygon.to_file(filename='./' + instrument_name + ' ' + k[:-2] + time_dict[k].replace(':', '')  + '.shp', driver="ESRI Shapefile")
 
-  
+        
         # (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
         #         context, source.fields(), source.wkbType(), source.sourceCrs())
 
@@ -415,8 +415,8 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 break
 
-            # Add a feature in the sink
-         #   sink.addFeature(feature, QgsFeatureSink.FastInsert)
+           # Add a feature in the sink
+           # sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
             # Update the progress bar
             feedback.setProgress(int(current * total))
