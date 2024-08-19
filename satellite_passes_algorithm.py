@@ -185,10 +185,10 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                 maximum_angle = a['Converted Angle ' + str(i)] [satellite_name]
                 
                 # test each vertex
-                for vertex in vertices_list:
-                    lng = vertex[0]    
-                    lat = vertex[1]
-                    vertex_order = vertices_list.index([lng,lat]) # get the order of the particular index
+                for j  in range (len(vertices_list)):
+                    lng = vertices_list[j][0]    
+                    lat = vertices_list[j][1]
+                    vertex_order = j # get the order of the particular index
                     overfly_count = 1
                     # scrap 
                     req=urllib.request.urlopen('https://www.heavens-above.com/PassSummary.aspx?satid='+ str(satellite_id) + '&lat=' + str(lat) + '&lng='+ str (lng) +'&loc=Unspecified&alt=0&tz=UCT&showall=t')
@@ -217,33 +217,66 @@ class Satellite_passesAlgorithm(QgsProcessingAlgorithm):
                                 
                             # if satellite altitude in heavensabove.com is greater than the boundary angle of the swath, then vertex is inside swath
                             if float (altitude) >float(maximum_angle):
-                                if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time
-                                    if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict: 
-                                        passtime = str(int(passtime[:2])+1)
-    
-                                    elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
-                                        passtime = str(int(passtime[:2])-1)
+                                pass_satellite_key = passdate + ' ' + passtime[:2]
+                                
+                                if pass_satellite_key not in pass_satellite_dict:  # surrounding time
+                                    forward = passdate + ' ' + str("{:02d}".format(int(passtime[:2])+1))
+                                    backward = passdate + ' ' +str("{:02d}".format(int(passtime[:2])-1))
+                                    
+                                    if forward in pass_satellite_dict: 
+                                        passtime = str("{:02d}".format(int(passtime[:2])+1))
+
+                                    elif backward in pass_satellite_dict:
+                                        passtime = str("{:02d}".format(int(passtime[:2])-1))
                                         
                                     else:     # if it is a new pass time
                                         overfly_count = overfly_count + 1   # have a new series of overfly
-                                        pass_satellite_dict[passdate + ' ' + passtime[:2]] = []  # construct a new date as key                
+                                        pass_satellite_dict[passdate + ' ' + passtime[:2]] = []  # construct a new time as key   
+                                
+                                # if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time
+                                #     if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict: 
+                                #         passtime = str(int(passtime[:2])+1)
+    
+                                #     elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
+                                #         passtime = str(int(passtime[:2])-1)
+                                        
+                                #     else:     # if it is a new pass time
+                                #         overfly_count = overfly_count + 1   # have a new series of overfly
+                                #         pass_satellite_dict[passdate + ' ' + passtime[:2]] = []  # construct a new date as key                
     
                                 # fill out all the three dictionaries
                                 
-                                pass_satellite_dict.setdefault(passdate+ ' ' + passtime[:2], []).append(vertex_order)     
+                                #pass_satellite_dict.setdefault(passdate+ ' ' + passtime[:2], []).append(vertex_order)     
+                                pass_satellite_dict[passdate+ ' ' + passtime[:2]].append(vertex_order)
                                 altitude_dict[passdate+ ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)                
                                 time_dict[passdate+ ' ' + passtime[:2]] = passtime
                                 daynight_dict[passdate+ ' ' + passtime[:2]] =daynight
                                 
                             # include also the marginal satellite altitudes which are just slightly out of swath, so that we can measure the proportion and update the vertex later
                             elif float (altitude) <= float(maximum_angle) and float (altitude) > float(float(maximum_angle)*0.8):
-                                if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time #%%
-                                    if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict:  #%%
-                                        passtime = str(int(passtime[:2])+1)
-                                    elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
-                                        passtime = str(int(passtime[:2])-1)
-                                    else:
-                                        passtime = passtime             
+                                
+                                pass_satellite_key = passdate + ' ' + passtime[:2]
+                                
+                                if pass_satellite_key not in pass_satellite_dict:  # surrounding time
+                                    forward = passdate + ' ' + str("{:02d}".format(int(passtime[:2])+1))
+                                    backward = passdate + ' ' +str("{:02d}".format(int(passtime[:2])-1))
+                                    
+                                    if forward in pass_satellite_dict: 
+                                        passtime = str("{:02d}".format(int(passtime[:2])+1))
+
+                                    elif backward in pass_satellite_dict:
+                                        passtime = str("{:02d}".format(int(passtime[:2])-1))
+                                        
+                                    else:     # if it is a new pass time
+                                        passtime = passtime 
+                                        
+                                # if passdate + ' ' + passtime[:2] not in pass_satellite_dict:  # surrounding time #%%
+                                #     if passdate + ' ' + str(int(passtime[:2])+1) in pass_satellite_dict:  #%%
+                                #         passtime = str(int(passtime[:2])+1)
+                                #     elif passdate + ' ' + str(int(passtime[:2])-1) in pass_satellite_dict:
+                                #         passtime = str(int(passtime[:2])-1)
+                                #     else:
+                                #         passtime = passtime             
                                 altitude_dict[passdate + ' ' + passtime[:2] + '_' + str(vertex_order)] = float(altitude)
     
                             else:
